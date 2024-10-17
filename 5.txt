@@ -1,0 +1,129 @@
+import json
+from typing import List
+
+class Book:
+    def __init__(self, title: str, author: str, year: int, genre: str):
+        self.title = title
+        self.author = author
+        self.year = year
+        self.genre = genre
+
+    def __str__(self):
+        return f"{self.title} by {self.author} ({self.year}) - Genre: {self.genre}"
+
+    def __eq__(self, other):
+        return self.title == other.title and self.author == other.author
+
+class Reader:
+    def __init__(self, name: str, reader_id: int, borrowed_books: List[Book] = None):
+        self.name = name
+        self.reader_id = reader_id
+        self.borrowed_books = borrowed_books if borrowed_books is not None else []
+
+    def borrow_book(self, book: Book):
+        self.borrowed_books.append(book)
+
+    def return_book(self, book: Book):
+        try:
+            self.borrowed_books.remove(book)
+        except ValueError:
+            print(f"{book.title} не взята этим читателем.")
+
+    def __str__(self):
+        borrowed_titles = ', '.join(book.title for book in self.borrowed_books)
+        return f"Читатель: {self.name} (ID: {self.reader_id}) - Взятые книги: {borrowed_titles if borrowed_titles else 'Нет книг'}"
+
+class Library:
+    def __init__(self, name: str):
+        self.name = name
+        self.books: List[Book] = []
+        self.readers: List[Reader] = []
+
+    def add_book(self, book: Book):
+        self.books.append(book)
+
+    def remove_book(self, book: Book):
+        try:
+            self.books.remove(book)
+        except ValueError:
+            print(f"Книга {book.title} не найдена в библиотеке.")
+
+    def register_reader(self, reader: Reader):
+        self.readers.append(reader)
+
+    def lend_book(self, reader_id: int, book_title: str):
+        reader = next((r for r in self.readers if r.reader_id == reader_id), None)
+        book = next((b for b in self.books if b.title == book_title), None)
+
+        if reader and book:
+            reader.borrow_book(book)
+            self.remove_book(book)
+            print(f"{reader.name} взял книгу: {book.title}.")
+        else:
+            print("Читатель или книга не найдены.")
+
+    def return_book(self, reader_id: int, book_title: str):
+        reader = next((r for r in self.readers if r.reader_id == reader_id), None)
+        book = next((b for b in self.books if b.title == book_title), None)
+
+        if reader and book:
+            reader.return_book(book)
+            self.add_book(book)
+            print(f"{reader.name} вернул книгу: {book.title}.")
+        else:
+            print("Читатель или книга не найдены.")
+
+    def find_book(self, title: str) -> List[Book]:
+        return [book for book in self.books if title.lower() in book.title.lower()]
+
+    def get_reader_books(self, reader_id: int) -> List[Book]:
+        reader = next((r for r in self.readers if r.reader_id == reader_id), None)
+        return reader.borrowed_books if reader else []
+
+    def save_state(self, filename: str):
+        data = {
+            'books': [{'title': b.title, 'author': b.author, 'year': b.year, 'genre': b.genre} for b in self.books],
+            'readers': [{'name': r.name, 'reader_id': r.reader_id, 'borrowed_books': [b.title for b in r.borrowed_books]} for r in self.readers]
+        }
+        with open(filename, 'w') as f:
+            json.dump(data, f)
+
+    def load_state(self, filename: str):
+        with open(filename, 'r') as f:
+            data = json.load(f)
+            self.books = [Book(**book) for book in data['books']]
+            self.readers = []
+            for reader_data in data['readers']:
+                reader = Reader(reader_data['name'], reader_data['reader_id'])
+                borrowed_books = []
+                for title in reader_data['borrowed_books']:
+                    try:
+                        book = next(b for b in self.books if b.title == title)
+                        borrowed_books.append(book)
+                    except StopIteration:
+                        print(f"Книга '{title}' не найдена при загрузке для читателя '{reader.name}'")
+                reader.borrowed_books = borrowed_books
+                self.readers.append(reader)
+
+# Пример использования
+library = Library("Городская библиотека")
+
+# Добавление книг
+library.add_book(Book("1984", "Джордж Оруэлл", 1949, "Драма"))
+library.add_book(Book("Мастер и Маргарита", "Михаил Булгаков", 1967, "Роман"))
+
+# Регистрация читателя
+reader1 = Reader("Иван Иванов", 1)
+library.register_reader(reader1)
+
+# Выдача книги
+library.lend_book(1, "1984")
+
+# Возврат книги
+library.return_book(1, "1984")
+
+# Сохранение состояния
+library.save_state("library_state.json")
+
+# Загрузка состояния
+library.load_state("library_state.json")
